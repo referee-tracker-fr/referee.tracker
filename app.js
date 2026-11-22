@@ -663,9 +663,9 @@ function loadData() {
       state._lastLoadTs = Date.now();
       const cacheInfo = window.RT_CACHE_INFO && window.RT_CACHE_INFO.matchs;
       if (cacheInfo && cacheInfo.stale) {
-        setStatus(`${state.allRows.length} ligne(s) · actualisation en arrière-plan…`, "");
+        setStatus("Actualisation en cours…", "");
       } else {
-        setStatus(`${state.allRows.length} ligne(s) chargée(s)`, "ok");
+        setStatus("Tes données sont à jour", "ok");
       }
       buildQuickFilterSelects_();
 
@@ -3194,7 +3194,7 @@ function moisPaiementsData_() {
   const now = new Date();
   const d0 = new Date(now.getFullYear(), now.getMonth(), 1), d1 = new Date(now.getFullYear(), now.getMonth() + 1, 1), d2 = new Date(now.getFullYear(), now.getMonth() + 2, 1);
   const sy = now >= new Date(now.getFullYear(), 6, 30) ? now.getFullYear() : now.getFullYear() - 1, saison = `${sy}/${sy + 1}`;
-  const z = () => ({ ret: 0, mois: 0, suiv: 0, plus: 0, sans: 0, nbMois: 0, nbRet: 0, recu: 0, delais: [] });
+  const z = () => ({ ret: 0, mois: 0, suiv: 0, plus: 0, sans: 0, nbMois: 0, nbRet: 0, recu: 0, delais: [], ech: {} });   // b165 — ech : reste dû par date prévue
   const par = { cd: z(), ligue: z(), ffbb: z(), cfj: z(), club: z() }, tot = z();
   const det = { mois: [], ret: [], ancien: [] };
   let ancien = 0;
@@ -3209,6 +3209,7 @@ function moisPaiementsData_() {
     const att = parseFrDate(get(r, "Date attendue") || get(r, "Date paiement"));
     const mc = moyC(par[cl] ? cl : "club");
     if (att && r._date && mc !== null) { predOk = true; const pr = new Date(Math.max(att.getTime(), r._date.getTime() + mc * 86400000)); if (pr >= d0 && pr < d1) predMois += r._reste; }
+    if (att) { const j = new Date(att.getFullYear(), att.getMonth(), att.getDate()).getTime(); c.ech[j] = (c.ech[j] || 0) + r._reste; }
     [c, tot].forEach(o => {
       if (!att) o.sans += r._reste;
       else if (att < d0) { o.ret += r._reste; o.nbRet++; }
@@ -3221,7 +3222,24 @@ function moisPaiementsData_() {
   });
   const tri = (a, b) => (a.att || 0) - (b.att || 0);
   det.mois.sort(tri); det.ret.sort(tri);
-  return { predMois, predOk, par, tot, det, ancien, saison, mois: now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), fin: new Date(d1 - 86400000) };
+  return { auj: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), predMois, predOk, par, tot, det, ancien, saison, mois: now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), fin: new Date(d1 - 86400000) };
+}
+/* b165 — date prévue de chaque virement en attente (au lieu de « le mois prochain ») : 3 dates au plus, le reste regroupé. */
+function echJour_(t) { return new Date(Number(t)).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); }
+function echeancesChips_(c, d0) {
+  const dates = Object.keys(c.ech).map(Number).sort((a, b) => a - b), vus = dates.slice(0, 3), reste = dates.slice(3).reduce((t, k) => t + c.ech[k], 0);
+  return vus.map(k => k < d0 ? `<span class="mp-chip mp-chip--ret">${formatMoney(c.ech[k])} · prévu le ${escapeHtml(echJour_(k))}, en retard</span>`
+      : `<span class="mp-chip">${formatMoney(c.ech[k])} · prévu le ${escapeHtml(echJour_(k))}</span>`).join("")
+    + (reste ? `<span class="mp-chip mp-chip--plus">${formatMoney(reste)} ensuite</span>` : "")
+    + (c.sans ? `<span class="mp-chip mp-chip--plus">${formatMoney(c.sans)} sans date</span>` : "");
+}
+/* Téléphone : la liste des virements attendus, par date puis par payeur. */
+function echeancesTel_() {
+  const m = moisPaiementsData_(), l = [];
+  PAYEURS_ORDRE_.forEach(k => Object.keys(m.par[k].ech).forEach(t => l.push({ t: Number(t), k, v: m.par[k].ech[t] })));
+  if (!l.length) return "";
+  l.sort((a, b) => a.t - b.t);
+  return `<div class="ech-tel"><h3 class="mp-h">Virements attendus</h3><ul class="ech-l">${l.slice(0, 8).map(x => `<li class="${x.t < m.auj ? "is-ret" : ""}"><span class="ech-d">${escapeHtml(echJour_(x.t))}</span><span class="ech-p">${escapeHtml(PAYEURS_LIB_[x.k])}${x.t < m.auj ? " · en retard" : ""}</span><strong>${formatMoney(x.v)}</strong></li>`).join("")}</ul>${l.length > 8 ? `<p class="card-sub">+ ${l.length - 8} autre(s) plus tard</p>` : ""}</div>`;
 }
 /* b19 — Haut de la page Paiements.
    « À recevoir ce mois-ci » = reste dû des missions dont l'ÉCHÉANCE (colonne
@@ -3249,7 +3267,7 @@ function renderMoisPaiements_() {
     <h3 class="mp-h">Qui te doit quoi</h3>
     <div class="mp-payeurs">${PAYEURS_ORDRE_.filter(k => m.par[k]).map(k => {
       const c = m.par[k], du = c.ret + c.mois + c.suiv + c.plus + c.sans;
-      const prochain = c.ret ? `<span class="mp-chip mp-chip--ret">${formatMoney(c.ret)} en retard</span>` : (c.mois ? `<span class="mp-chip">${formatMoney(c.mois)} ce mois-ci</span>` : (c.suiv ? `<span class="mp-chip">${formatMoney(c.suiv)} le mois prochain</span>` : (c.plus ? `<span class="mp-chip mp-chip--plus">${formatMoney(c.plus)} plus tard</span>` : "")));
+      const prochain = echeancesChips_(c, m.auj);
       return `<div class="mp-payeur${c.ret ? " is-ret" : ""}${du ? "" : " is-solde"}">
         <div class="mp-p-nom">${escapeHtml(PAYEURS_LIB_[k])}</div>
         <div class="mp-p-du"><strong>${du ? formatMoney(du) : "Soldé"}</strong><span>${du ? "reste à recevoir" : "rien en attente"}</span></div>
@@ -3280,6 +3298,7 @@ function renderArgentTel_(root, rows) {
       <div class="tel-kpi tel-kpi--att"><strong>${formatMoney(sum(aVenir, "_reste"))}</strong><span>à venir</span></div>
       <div class="tel-kpi ${retards.length ? "tel-kpi--ko" : ""}"><strong>${formatMoney(sum(retards, "_reste"))}</strong><span>en retard</span></div>
     </div>
+    ${echeancesTel_()}
     ${bloc("tel-retard", "En retard", retards, true, "is-retard")}
     ${bloc("tel-avenir", "À percevoir", aVenir, true)}
     ${bloc("tel-recus", "Reçus", recus, false)}
@@ -3682,9 +3701,16 @@ const BAREME_CATS_ = ["Séniors", "U21", "U20", "U18", "U17", "U15", "U13", "U11
    de ce payeur (les plus anciens dont le total colle au montant), répartit le montant réel au prorata et les passe
    en « Reçu » (tolérance ±5 € côté moteur). */
 const VIR_PAYEURS_ = { cd: "Comité départemental", ligue: "Ligue régionale", ffbb: "FFBB" };
-function virCandidats_(payeur) {
-  return (state.allRows || []).filter(r => r._isActive && r._format !== "Alerte" && rbClasse_(r) === payeur && (r._reste || 0) > 0
-    && !/^(Reçu|Bénévole|Annulé)$/.test(get(r, "Statut paiement")) && r._date && r._date <= new Date()).sort((a, b) => a._date - b._date);
+/* b165 — un virement ne peut payer que des matchs déjà joués à sa date. On propose aussi les matchs de ce payeur déjà
+   notés « Reçu » à 10 jours près de cette date : l'arbitre les coche souvent avant de saisir le vrai montant du virement
+   (cas réel : 55,20 + 16,60 notés reçus, virement de 72,60 € → l'outil allait chercher des matchs joués APRÈS le virement). */
+function virDejaRecu_(r) { return get(r, "Statut paiement") === "Reçu"; }
+function virDuC_(r) { return Math.round((virDejaRecu_(r) ? toNumber(get(r, "Indemnité totale")) : (r._reste || 0)) * 100); }
+function virCandidats_(payeur, jour) {
+  const lim = jour || new Date(), proche = d => !!d && Math.abs(d - lim) <= 10 * 86400000;
+  return (state.allRows || []).filter(r => r._isActive && r._format !== "Alerte" && rbClasse_(r) === payeur && r._date && r._date <= lim
+    && !/^(Bénévole|Annulé)$/.test(get(r, "Statut paiement"))
+    && (virDejaRecu_(r) ? proche(parseFrDate(get(r, "Date reçu recevant") || get(r, "Date réception"))) : (r._reste || 0) > 0)).sort((a, b) => a._date - b._date);
 }
 function virTaux_() { const t = Number(((typeof Profil !== "undefined" && Profil.config && Profil.config.tarifs) || {}).indemnite_km); return t > 0 && t < 2 ? t : 0.40; }
 // b89 — km estimés par Referee Tracker (pas lus sur une convocation) : 3x3, convocations e-mail sans montant.
@@ -3701,14 +3727,22 @@ function virExplique_(ch, ecartC) {
     if (g.some(r => toNumber(get(r, "Km A/R stats")) !== km)) continue;
     // part fixe = indemnité − km × taux ; les km retenus par le payeur doivent être un nombre entier
     const indC = Math.round(toNumber(get(g[0], "Indemnité totale")) * 100), fixeC = indC - Math.round(km * tauxC), kmN = (indC + d - fixeC) / tauxC;
-    if (!(kmN > 0) || Math.abs(kmN - Math.round(kmN)) > 0.001 || Math.abs(kmN - km) > 120) continue;
+    // b165 — écart plausible seulement : 10 km, ou la moitié de la distance estimée (« 94 km au lieu de 4 » n'explique rien)
+    if (!(kmN > 0) || Math.abs(kmN - Math.round(kmN)) > 0.001 || Math.abs(kmN - km) > Math.max(10, km / 2)) continue;
     return { matchs: g, km, kmN: Math.round(kmN), dEur: d / 100 };
   }
   return null;
 }
-function virSelection_(cands, montant) {
+function virSelection_(cands, montant, jour) {
+  // b165 — la période d'abord : matchs dont l'échéance tombe au plus 20 jours après le virement (ou déjà notés reçus).
+  const lim = (jour || new Date()).getTime() + 20 * 86400000;
+  const periode = cands.filter(r => { if (virDejaRecu_(r)) return true; const a = parseFrDate(get(r, "Date attendue") || get(r, "Date paiement")); return !a || a.getTime() <= lim; });
+  const res = virChercher_(periode, montant);
+  return res.sel.size || periode.length === cands.length ? res : virChercher_(cands, montant);
+}
+function virChercher_(cands, montant) {
   // b89 — AUCUNE tolérance : on cherche le total exact au centime, sinon un écart expliqué par des km estimés.
-  const cible = Math.round(montant * 100), c = cands.slice(0, 22), vals = c.map(r => Math.round(r._reste * 100)), n = c.length;
+  const cible = Math.round(montant * 100), c = cands.slice(0, 22), vals = c.map(virDuC_), n = c.length;
   let t = 0;
   for (let i = 0; i < n; i++) { t += vals[i]; if (t === cible) return { sel: new Set(c.slice(0, i + 1).map(r => get(r, "UID"))), exp: null }; }
   let expl = null;
@@ -3742,16 +3776,17 @@ function virementZone_(root) {
     P.value = c.dataset.virP; P.dispatchEvent(new Event("change"));
   }));
   const maj = () => {
-    const cands = virCandidats_(P.value), montant = toNumber(M.value);
-    if (!cands.length) { L.innerHTML = '<p class="card-sub">Aucun match en attente pour ce payeur.</p>'; return; }
-    const auto = montant > 0 ? virSelection_(cands, montant) : { sel: new Set(), exp: null };
-    L.innerHTML = `<p class="card-sub">${montant > 0 ? (auto.sel.size ? "Matchs retrouvés automatiquement : vérifie, puis enregistre." : "Aucune combinaison de matchs ne donne ce montant : coche les matchs à la main.") : "Saisis le montant du virement."}</p>
-      <ul class="vir-ul">${cands.map(r => `<li><label class="vir-li"><input type="checkbox" data-vir="${escapeHtml(get(r, "UID"))}"${auto.sel.has(get(r, "UID")) ? " checked" : ""}><span class="vir-li-t"><span>${escapeHtml(rbFmtDate_(r._date))} · ${escapeHtml(codeCompetition(r) || r._format)}</span><small>${escapeHtml(rbEquipes_(r))}${virEstime_(r) ? " · km estimés" : ""}</small></span><b class="vir-li-m">${formatMoney(r._reste)}</b></label></li>`).join("")}</ul>
+    const jour = D.value ? new Date(D.value + "T23:59:59") : new Date();
+    const cands = virCandidats_(P.value, jour), montant = toNumber(M.value);
+    if (!cands.length) { L.innerHTML = '<p class="card-sub">Aucun match de ce payeur joué avant cette date et encore en attente.</p>'; return; }
+    const auto = montant > 0 ? virSelection_(cands, montant, jour) : { sel: new Set(), exp: null };
+    L.innerHTML = `<p class="card-sub">${montant > 0 ? (auto.sel.size ? "Matchs retrouvés automatiquement : vérifie, puis enregistre." + (cands.some(r => auto.sel.has(get(r, "UID")) && virDejaRecu_(r)) ? " Les matchs déjà notés reçus prendront le montant réel du virement." : "") : "Aucune combinaison de matchs ne donne ce montant : coche les matchs à la main.") : "Saisis le montant du virement."}</p>
+      <ul class="vir-ul">${cands.map(r => `<li><label class="vir-li"><input type="checkbox" data-vir="${escapeHtml(get(r, "UID"))}"${auto.sel.has(get(r, "UID")) ? " checked" : ""}><span class="vir-li-t"><span>${escapeHtml(rbFmtDate_(r._date))} · ${escapeHtml(codeCompetition(r) || r._format)}${virDejaRecu_(r) ? ' <em class="vir-tag">déjà noté reçu</em>' : ""}</span><small>${escapeHtml(rbEquipes_(r))}${virEstime_(r) ? " · km estimés" : ""}</small></span><b class="vir-li-m">${formatMoney(virDuC_(r) / 100)}</b></label></li>`).join("")}</ul>
       <div class="vir-tot" id="virT"></div><button type="button" class="small-btn" id="virGo">Enregistrer le virement</button>`;
     let etat = null;
     const tot = () => {
       const ch = [...L.querySelectorAll("[data-vir]:checked")].map(x => cands.find(r => get(r, "UID") === x.getAttribute("data-vir")));
-      const sC = ch.reduce((t, r) => t + Math.round(r._reste * 100), 0), eC = Math.round(montant * 100) - sC, exp = virExplique_(ch, eC);
+      const sC = ch.reduce((t, r) => t + virDuC_(r), 0), eC = Math.round(montant * 100) - sC, exp = virExplique_(ch, eC);
       etat = { ch, sC, eC, exp };
       const T = L.querySelector("#virT");
       if (!ch.length) { T.innerHTML = ""; return etat; }
@@ -3767,7 +3802,7 @@ function virementZone_(root) {
       if (!ch.length || !(montant > 0)) { setStatus("Saisis le montant et coche au moins un match", "error"); return; }
       if (eC && !exp && !confirm("Le montant ne correspond pas aux matchs cochés. Les matchs passeront « Reçu partiel » ou « À vérifier ». Continuer ?")) return;
       const b = L.querySelector("#virGo"); b.disabled = true;
-      const du = new Map(ch.map(r => [get(r, "UID"), Math.round(r._reste * 100)]));
+      const du = new Map(ch.map(r => [get(r, "UID"), virDuC_(r)]));
       let ok = 0, kmEchec = "";
       // 1) km retenus par le payeur : la convocation n'avait pas de km, on corrige l'indemnité au centime.
       if (exp) {
@@ -3783,7 +3818,7 @@ function virementZone_(root) {
       // 2) chaque match reçoit exactement son dû ; un reste non expliqué va sur le dernier (reçu partiel / trop-perçu → à vérifier).
       let reste = Math.round(montant * 100);
       for (let i = 0; i < ch.length; i++) {
-        const uid = get(ch[i], "UID"), deja = Math.round(toNumber(get(ch[i], "Reçu recevant")) * 100);
+        const uid = get(ch[i], "UID"), deja = virDejaRecu_(ch[i]) ? 0 : Math.round(toNumber(get(ch[i], "Reçu recevant")) * 100);   // b165 — déjà noté reçu : le montant est remplacé, pas ajouté
         const part = i === ch.length - 1 ? reste : Math.min(du.get(uid), reste); reste -= part;
         try {
           const res = await jsonp("payment.update", { uid, recu_recevant: ((deja + part) / 100).toFixed(2), mode_recevant: "Virement", date_recu_recevant: D.value });
@@ -3795,7 +3830,7 @@ function virementZone_(root) {
       renderAll();
     });
   };
-  P.addEventListener("change", maj); M.addEventListener("input", maj); maj();
+  P.addEventListener("change", maj); M.addEventListener("input", maj); D.addEventListener("change", maj); maj();
 }
 
 async function baremeZone_(root) {

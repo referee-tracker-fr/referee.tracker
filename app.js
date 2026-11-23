@@ -8121,6 +8121,33 @@ function agregEstim_(rows) {
   o.ind = round2(o.ind); o.km = Math.round(o.km); o.carb = round2(o.carb); o.ent = round2(o.ent);
   return o;
 }
+/* b167 — estimation MOIS PAR MOIS. Remplace « restant N-1 × rythme du jour », qui bougeait près d'un jour sur cinq sans
+   aucune nouvelle convocation (jouer un match déjà désigné faisait monter le total). Rejoué jour par jour sur 11 saisons
+   passées de 3 arbitres : erreur moyenne 13 % contre 15 %, et l'estimation ne bouge plus sans raison que 1 % des jours
+   contre 18 %.
+   Pour chaque mois : attendu = part habituelle du mois (2 dernières saisons, la dernière pèse plus) × nombre de matchs de la
+   saison dernière × rythme. On retient le plus grand entre cet attendu et ce qui est déjà connu (joué + désigné).
+   Le rythme = matchs joués / attendus AVANT le mois en cours : figé au 1er du mois, tiré vers 1 (20 matchs fictifs de
+   chaque côté) et borné [0,8 ; 1,25], parce qu'un bon début de saison annonce mal la suite.
+   Listes de Date. Renvoie null sans saison passée d'au moins 15 matchs. */
+function estimMoisParMois_(faits, avenir, precedentes, Y, auj) {
+  if (!precedentes[0] || precedentes[0].length < 15) return null;
+  const idx = (d, y) => (d.getMonth() === 6 && d.getFullYear() === y) ? 0 : (d.getMonth() + 5) % 12;   // août = 0 … juillet = 11
+  const parMois = (l, y) => { const c = new Array(12).fill(0); l.forEach(d => c[idx(d, y)]++); return c; };
+  const parts = new Array(12).fill(0); let poidsTot = 0;
+  [0.5, 0.3].forEach((w, k) => {
+    const l = precedentes[k]; if (!l || l.length < 15) return;
+    parMois(l, Y - 1 - k).forEach((n, i) => { parts[i] += w * n / l.length; }); poidsTot += w;
+  });
+  const base = parts.map(x => x / poidsTot * precedentes[0].length);
+  const mc = idx(auj, Y), fm = parMois(faits, Y), am = parMois(avenir, Y);
+  let avant = 0, bAvant = 0;
+  for (let i = 0; i < mc; i++) { avant += fm[i]; bAvant += base[i]; }
+  const ratio = Math.min(1.25, Math.max(0.8, (20 + avant) / (20 + bAvant)));
+  let total = avant;
+  for (let i = mc; i < 12; i++) total += Math.max(fm[i] + am[i], ratio * base[i]);
+  return { total, ratio, base, marge: mc <= 4 ? 0.18 : mc <= 7 ? 0.13 : 0.08 };
+}
 function calculerEstimation_() {
   const Y = saisonDebutAnnee_();
   const debut = new Date(Y, 6, 30), fin = new Date(Y + 1, 6, 29, 23, 59, 59);
@@ -8131,33 +8158,28 @@ function calculerEstimation_() {
   const avenir = saison.filter(r => r._date >= auj);
 
   const decale = d => new Date(d.getFullYear() - 1, d.getMonth(), d.getDate());
-  const prevDebut = decale(debut), prevAuj = decale(auj), prevFin = decale(fin);
+  const prevDebut = decale(debut), prevFin = decale(fin);
   const prev = actifs.filter(r => r._date >= prevDebut && r._date <= prevFin);
-  const prevEcoule = prev.filter(r => r._date < prevAuj).length;
-  const prevReste = prev.filter(r => r._date >= prevAuj).length;
+  const prev2 = actifs.filter(r => r._date >= decale(prevDebut) && r._date <= decale(prevFin));
 
   const semainesRestantes = Math.max(0, (fin - auj) / (7 * 86400000));
   const semainesEcoulees = Math.max(1, (auj - debut) / (7 * 86400000));
-  /* b39 — le ratio « rythme actuel / rythme N-1 » est très bruité en début
-     de saison (3 matchs d'avance en octobre faisaient x1,6 sur toute l'année :
-     118 matchs annoncés pour 71 l'an passé). On ne lui fait confiance qu'en
-     proportion de la saison écoulée (plein poids après 16 semaines), et on le
-     borne à [0,7 ; 1,4]. */
-  let ratio = 1, methode, ratioBrut = 1, poids = 0;
-  if (prev.length && prevReste > 0) {
-    ratioBrut = Math.min(1.4, Math.max(0.7, (faits.length + 3) / (prevEcoule + 3)));
-    poids = Math.min(1, semainesEcoulees / 16);
-    ratio = 1 + (ratioBrut - 1) * poids;
-    methode = "calendrier connu + rythme de la saison passée (x" + ratio.toFixed(2).replace(".", ",") + " selon ton rythme actuel, pondéré à " + Math.round(poids * 100) + " % car " + Math.round(semainesEcoulees) + " semaine(s) écoulée(s))";
+  // b167 — nombre de matchs attendus : modèle mois par mois (voir estimMoisParMois_), sinon rythme actuel prudent.
+  const dts = l => l.map(r => r._date);
+  const mm = estimMoisParMois_(dts(faits), dts(avenir), [dts(prev), dts(prev2)], Y, auj);
+  let restantCentral, methode, ratio = 1, marge = 0.25;
+  if (mm) {
+    ratio = mm.ratio; marge = mm.marge;
+    restantCentral = Math.max(avenir.length, Math.round(mm.total - faits.length));
+    methode = "calendrier connu + ton rythme mois par mois (saisons passées x" + ratio.toFixed(2).replace(".", ",") + ")";
   } else {
-    methode = "calendrier connu + rythme actuel (pas d'historique N-1 comparable, estimation prudente)";
+    restantCentral = avenir.length + Math.round((faits.length / semainesEcoulees) * semainesRestantes * 0.6);
+    methode = "calendrier connu + rythme actuel (pas de saison passée comparable, estimation prudente)";
   }
-  let restantCentral;
-  if (prev.length && prevReste > 0) restantCentral = Math.max(avenir.length, Math.round(prevReste * ratio));
-  else restantCentral = avenir.length + Math.round((faits.length / semainesEcoulees) * semainesRestantes * 0.6);
-  const restantHaut = Math.max(restantCentral, Math.round(restantCentral * 1.25));
+  // Fourchette : marge réellement constatée en rejouant les saisons passées (±18 % à l'automne, ±13 % l'hiver, ±8 % au printemps).
+  const margeN = Math.round(marge * (faits.length + restantCentral));
   const extraC = Math.max(0, restantCentral - avenir.length);
-  const extraH = Math.max(0, restantHaut - avenir.length);
+  const extraH = extraC + margeN, extraB = Math.max(0, extraC - margeN);
 
   /* b19 — valeur d'un match « à prévoir » plus fiable : bénévolat exclu,
      et tant que la saison compte moins de 12 missions, on complète avec
@@ -8174,7 +8196,7 @@ function calculerEstimation_() {
   const carbMoy = realFuelCostClient(m.km, auj), entMoy = m.km * entretienKmClient_(auj);
   const extraVal = n => ({ n, ind: round2(n * m.ind), km: Math.round(n * m.km), carb: round2(n * carbMoy), ent: round2(n * entMoy) });
 
-  const rF = agregEstim_(faits), rA = agregEstim_(avenir), rC = extraVal(extraC), rH = extraVal(extraH);
+  const rF = agregEstim_(faits), rA = agregEstim_(avenir), rC = extraVal(extraC), rH = extraVal(extraH), rB = extraVal(extraB);
 
   // Hôtels : payés (saison) + nuits conseillées à venir non encore saisies
   const hotelsPayes = (state.hotels || []).filter(h => { const d = parseFrDate(h.date); return d && d >= debut && d <= fin; })
@@ -8188,14 +8210,14 @@ function calculerEstimation_() {
   const recuSaison = round2(saison.reduce((t, r) => t + (r._encaisse || 0), 0));
   const resteConnu = round2(saison.reduce((t, r) => t + (r._reste || 0), 0));
   const tot = (a, b, c) => ({ n: a.n + b.n + c.n, ind: round2(a.ind + b.ind + c.ind), km: a.km + b.km + c.km, carb: round2(a.carb + b.carb + c.carb), ent: round2(a.ent + b.ent + c.ent) });
-  const totC = tot(rF, rA, rC), totB = tot(rF, rA, { n: 0, ind: 0, km: 0, carb: 0, ent: 0 }), totH = tot(rF, rA, rH);
+  const totC = tot(rF, rA, rC), totB = tot(rF, rA, rB), totH = tot(rF, rA, rH);
   const hotelsFin = round2(hotelsPayes + hotelPrevu);
   return {
     Y, rF, rA, rC, totC, totB, totH, hotelsPayes: round2(hotelsPayes), hotelPrevu, nbHotelPrevu: aVenirHotel.length, ecoHotel,
     hotelsFin, netC: net(totC, hotelsFin), netB: net(totB, hotelsFin), netH: net(totH, hotelsFin),
     recuSaison, resteConnu, aToucherFin: round2(resteConnu + rC.ind), aToucherHaut: round2(resteConnu + rH.ind),
     restantCentral, extraC, methode, semainesRestantes: Math.round(semainesRestantes), prevN: prev.length, m,
-    ratio, ratioBrut, poids, prevEcoule, prevReste
+    ratio, marge
   };
 }
 
@@ -8213,7 +8235,7 @@ function renderEstimation() {
     <h2 class="section-title">Estimation fin de saison <span class="count">${e.Y}/${e.Y + 1}</span> <button type="button" class="info-btn" id="estInfoBtn" aria-label="Comment c'est calculé" title="Comment c'est calculé">${ICONE_INFO_}</button></h2>
     <div class="kpi-grid">
       <div class="kpi hero"><label>Net estimé fin de saison</label><strong>${F(e.netC)}</strong>
-        <span class="sub">fourchette ${F(e.netB)} (calendrier connu seul) à ${F(e.netH)}</span></div>
+        <span class="sub">fourchette ${F(e.netB)} à ${F(e.netH)} · marge de ±${Math.round(e.marge * 100)} % constatée sur les saisons passées</span></div>
       <div class="kpi"><label>Montants à toucher d'ici la fin</label><strong>${F(e.aToucherFin)}</strong><span class="sub">dont ${F(e.resteConnu)} déjà dus · jusqu'à ${F(e.aToucherHaut)}</span></div>
       <div class="kpi"><label>Déjà encaissé cette saison</label><strong>${F(e.recuSaison)}</strong></div>
       <div class="kpi"><label>Km prévus (saison)</label><strong>${N(e.totC.km)}</strong><span class="sub">${N(e.rA.km + e.rC.km)} restants</span></div>
@@ -8243,7 +8265,8 @@ function estInfoHtml_(e) {   // b156 — version courte
   const F = v => formatMoney(v);
   return `<p><strong>Réalisé</strong> : matchs joués, montants réels.</p>
     <p><strong>À venir</strong> : désignations reçues, calculées au km près.</p>
-    <p><strong>À prévoir</strong> : matchs pas encore reçus, estimés d'après la saison dernière et ton rythme actuel.</p>
+    <p><strong>À prévoir</strong> : matchs pas encore reçus, estimés mois par mois d'après tes deux dernières saisons et ton rythme.</p>
+    <p>L'estimation ne change que quand une convocation arrive ou quand le mois change, pas quand tu joues un match déjà désigné.</p>
     <p><strong>Sûr</strong> : ${F(round2(e.rF.ind + e.rA.ind))} d'indemnités (réalisé + à venir). Le reste est une projection, plus fiable à mesure que la saison avance.</p>`;
 }
 

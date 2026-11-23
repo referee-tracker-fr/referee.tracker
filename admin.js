@@ -2337,11 +2337,22 @@
   const anJours = (d) => d ? Math.floor((Date.now() - new Date(d).getTime()) / 864e5) : null;
   const anFeu = (j, vert, orange) => j == null ? ["Jamais", "red"] : j <= vert ? [j === 0 ? "Aujourd'hui" : "Il y a " + j + " j", "green"] : j <= orange ? ["Il y a " + j + " j", "orange"] : ["Il y a " + j + " j", "red"];
   const anEur = (v) => (Number(v) || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+  // b170 — rapports DMARC : qui envoie des mails au nom de referee-tracker.fr, et sont-ils authentifiés ?
+  const dmarcCarteHtml = (D) => { const N = (v) => Number(v) || 0, jr = (d) => String(d || "").split("-").reverse().join("/"), SUITE = { reject: "refusé", quarantine: "mis en spam", none: "laissé passer" };
+    const tete = '<div class="card an-c"><div class="an-h"><h3>Mails envoyés au nom de referee-tracker.fr</h3>' + (D ? '<span class="mut tiny">' + fmt(D.le) + "</span>" : "") + "</div>";
+    if (!D) return tete + '<p class="mut">Aucun rapport lu pour l\'instant : premier résumé au prochain passage du moteur principal (toutes les 6 heures).</p></div>';
+    if (!N(D.rapports)) return tete + '<p class="mut">Aucun rapport reçu sur les ' + N(D.jours) + " derniers jours. Les messageries n'en envoient que les jours où elles ont vu des mails à notre nom.</p></div>";
+    const E = D.echecs || [], P = D.par || [];
+    return tete + '<div class="an-stock"><div><b>' + N(D.total) + "</b><span>mails vus sur " + N(D.jours) + ' j</span></div><div><b>' + N(D.ok) + '</b><span>authentifiés</span></div><div><b>' + N(D.echoues) + '</b><span>non authentifiés</span></div><div><b>' + N(D.refuses) + '</b><span>refusés ou mis en spam</span></div><div><b>' + N(D.rapports) + "</b><span>rapports reçus</span></div></div>" +
+      (E.length ? '<ul class="an-l">' + E.map((x) => '<li><span class="an-dot ' + (x.disp === "none" ? "red" : "orange") + '"></span>' + N(x.n) + " mail(s) non authentifié(s) depuis le serveur " + esc(x.ip) + " au nom de " + esc(x.de) + " · " + esc(SUITE[x.disp] || x.disp || "suite inconnue") + " · vu par " + esc(x.vu_par) + "</li>").join("") + (N(D.echecs_autres) ? '<li class="mut">… et ' + N(D.echecs_autres) + " autre(s) serveur(s)</li>" : "") + "</ul>"
+        : '<p class="ok-l">✓ Tous les mails vus à notre nom étaient authentifiés.</p>') +
+      '<p class="mut tiny">Rapports du ' + esc(jr(D.du)) + " au " + esc(jr(D.au)) + (P.length ? " · " + P.map((x) => esc(x.org) + " : " + N(x.total)).join(" · ") : "") + ". Un mail non authentifié est soit une usurpation (la refuser est le but du réglage), soit un de nos envois mal configuré : à regarder si le serveur est l'un des nôtres.</p></div>"; };
   rendus.analyses = async function (force) {
     const el = $("sec-analyses");
     if (force || !cache.analyses) { el.innerHTML = '<p class="mut">Chargement des analyses…</p>'; try { cache.analyses = await rpcAdmin("rt_analyses"); } catch (e) { el.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; return; } }
     if (force || cache.auditBoite === undefined) { try { const r = await sbRest("config_globale?select=valeur&cle=eq.admin.audit_boite"); cache.auditBoite = (r && r[0] && r[0].valeur) || null; } catch (e) { cache.auditBoite = null; } }
     const AB = cache.auditBoite;
+    if (force || cache.dmarc === undefined) { try { const r = await sbRest("config_globale?select=valeur&cle=eq.admin.dmarc"); cache.dmarc = (r && r[0] && r[0].valeur) || null; } catch (e) { cache.dmarc = null; } }   // b170
     const D = cache.analyses || {}, A = (D.arbitres || []).filter((a) => a.statut !== "supprime"), PY = D.payeurs || [];
     const enSaison = (() => { const m = new Date().getMonth(); return m >= 8 || m <= 5; })();   // septembre → juin
     // 1. retards par payeur
@@ -2399,6 +2410,7 @@
       (AB ? '<div class="an-stock"><div><b>' + AB.inbox_total + '</b><span>en boîte de réception</span></div><div><b>' + AB.inbox_sans_libelle + '</b><span>sans libellé</span></div><div><b>' + (AB.libelles["Referee Tracker/À vérifier"] || 0) + '</b><span>à vérifier</span></div><div><b>' + (AB.libelles["Referee Tracker/Anomalie"] || 0) + '</b><span>anomalies</span></div><div><b>' + AB.verifier_bascules + '</b><span>rangées ce jour</span></div></div>' +
         (AB.problemes && AB.problemes.length ? '<ul class="an-l">' + AB.problemes.map((x) => '<li><span class="an-dot orange"></span>' + esc(x) + "</li>").join("") + "</ul>" : '<p class="ok-l">✓ Aucun mail mal classé détecté.</p>')
         : '<p class="mut">Premier audit au prochain passage du moteur principal (une fois par jour).</p>') + "</div>" +
+      dmarcCarteHtml(cache.dmarc) +
       // 2
       '<div class="card an-c"><div class="an-h"><h3>Chronologie par arbitre</h3>' + anCsv("chronologie", ["Arbitre", "Statut", "Inscription", "Compte créé", "Premier match importé", "Dernière convocation reçue", "Dernière connexion", "Minutes 30 j", "Matchs saison", "Virements pointés", "Tickets"], A.map((a) => [a.prenom, a.statut, a.inscription || "", a.cree_le || "", a.premier_ajout || "", a.dernier_ajout || "", a.derniere_connexion || "", a.minutes_30j, a.matchs_saison, a.virements, a.tickets])) + "</div>" +
       '<input class="an-f" id="anF" placeholder="Filtrer par prénom…"><div class="an-chr">' +

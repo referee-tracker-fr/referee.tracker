@@ -8174,6 +8174,27 @@ function estimProfilType_(faits, avenir, Y, auj) {
   for (let i = mc; i < 12; i++) total += Math.max(fm[i] + am[i], niveau * g[i]);
   return { total, ratio: 1, niveau, marge: mc <= 4 ? 0.23 : mc <= 7 ? 0.13 : 0.07 };
 }
+/* b167 — pas assez de données : on ne montre PAS d'estimation (mieux vaut le dire que d'afficher un chiffre fragile).
+   Sans saison passée exploitable, il faut au moins ESTIM_MIN_MATCHS_ matchs connus cette saison (joués + désignés).
+   Renvoie null si l'estimation est fiable, sinon { nb, min }. */
+const ESTIM_MIN_MATCHS_ = 15;
+function estimVerrou_(aHistorique, nbConnus) {
+  return aHistorique || nbConnus >= ESTIM_MIN_MATCHS_ ? null : { nb: nbConnus, min: ESTIM_MIN_MATCHS_ };
+}
+const ICONE_CADENAS_ = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+function estimCadenasHtml_(e) {
+  const v = e.verrou, pct = Math.min(100, Math.round(v.nb / v.min * 100)), sur = round2(e.rF.ind + e.rA.ind);
+  return `<div class="est-cadenas" role="status"><div class="est-cadenas-box">
+      <span class="est-cadenas-ic">${ICONE_CADENAS_}</span>
+      <h3>Estimation verrouillée</h3>
+      <p>Il y a encore trop peu de matchs pour construire une estimation fiable. C'est normal au début : elle se débloque toute seule.</p>
+      <div class="est-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${v.min}" aria-valuenow="${v.nb}"><span style="width:${pct}%"></span></div>
+      <p class="est-prog-txt"><b>${v.nb}</b> match${v.nb > 1 ? "s" : ""} enregistré${v.nb > 1 ? "s" : ""} sur <b>${v.min}</b> nécessaires · encore ${v.min - v.nb}</p>
+      ${sur > 0 ? `<p class="est-sur">Ce qui est sûr aujourd'hui : <b>${formatMoney(sur)}</b> d'indemnités (matchs joués et désignés).</p>` : ""}
+      <p class="card-sub">Pour débloquer plus vite, importe ta saison passée : l'estimation suivra ton propre calendrier.</p>
+      <button type="button" class="small-btn" data-est-import>Importer ma saison passée</button>
+    </div></div>`;
+}
 function calculerEstimation_() {
   const Y = saisonDebutAnnee_();
   const debut = new Date(Y, 6, 30), fin = new Date(Y + 1, 6, 29, 23, 59, 59);
@@ -8245,7 +8266,8 @@ function calculerEstimation_() {
     hotelsFin, netC: net(totC, hotelsFin), netB: net(totB, hotelsFin), netH: net(totH, hotelsFin),
     recuSaison, resteConnu, aToucherFin: round2(resteConnu + rC.ind), aToucherHaut: round2(resteConnu + rH.ind),
     restantCentral, extraC, methode, semainesRestantes: Math.round(semainesRestantes), prevN: prev.length, m,
-    ratio, marge, sansHistorique: !perso
+    ratio, marge, sansHistorique: !perso,
+    verrou: estimVerrou_(!!perso, faits.length + avenir.length)
   };
 }
 
@@ -8285,6 +8307,12 @@ function renderEstimation() {
 
     <p class="card-sub">Carburant au prix de ta période, entretien selon ton enveloppe annuelle. Recalcul à chaque désignation.</p>
   `;
+  if (e.verrou) {   // b167 — toute la page est floutée et inerte, l'encadré au cadenas explique ce qu'il manque
+    root.innerHTML = `<div class="est-verrou-zone"><div class="est-flou" aria-hidden="true" inert>${root.innerHTML}</div>${estimCadenasHtml_(e)}</div>`;
+    const bImp = root.querySelector("[data-est-import]");
+    if (bImp) bImp.addEventListener("click", () => rtImportHistorique_());
+    return;
+  }
   const bi = root.querySelector("#estInfoBtn");
   if (bi) bi.addEventListener("click", () => ouvrirModaleInfo_("Comment c'est calculé", estInfoHtml_(e)));
 }
@@ -8380,6 +8408,15 @@ function renderProjection(proj) {
   // b70 — une seule estimation de fin de saison dans toute l'app : celle de la page Estimation (même calcul, même chiffre).
   try {
     const e = calculerEstimation_();
+    if (e && e.verrou) return `
+    <div class="analysis-hero est-hero-verrou" style="margin-top:14px;padding:18px 20px">
+      <div class="eyebrow">Estimation fin de saison ${e.Y}/${e.Y + 1}</div>
+      <div class="big" style="font-size:22px">${ICONE_CADENAS_} Verrouillée</div>
+      <div class="breakdown">
+        <span><b>${e.verrou.nb}</b> match${e.verrou.nb > 1 ? "s" : ""} sur <b>${e.verrou.min}</b> nécessaires</span>
+        <span><button type="button" class="action-link" data-goto-analyse="estimation">Voir pourquoi →</button></span>
+      </div>
+    </div>`;
     if (e && e.netC !== undefined) return `
     <div class="analysis-hero" style="margin-top:14px;padding:18px 20px">
       <div class="eyebrow">Estimation fin de saison ${e.Y}/${e.Y + 1}</div>

@@ -6116,3 +6116,16 @@ body:has(#tabMorePanel:not([hidden])) #rtVoile { z-index: 95; }
 .pay-mois b { font-weight: 800; }
 .pay-mois-l--tel { margin: -4px 2px 14px; font-size: 13.5px; color: var(--muted); } .pay-mois-l--tel b { color: var(--text); }
 .mp-chip--mois { background: var(--gold-soft); border-color: transparent; color: var(--text); }
+/* b167 — estimation verrouillée (pas assez de matchs) : page floutée et inerte, encadré au cadenas par-dessus */
+.est-verrou-zone { position: relative; min-height: 460px; }
+.est-flou { filter: blur(9px); opacity: .5; pointer-events: none; user-select: none; }
+.est-cadenas { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-start; padding: 64px 12px 0; }
+.est-cadenas-box { width: min(440px, 100%); padding: 22px 20px 20px; text-align: center; border-radius: 22px; background: var(--verre-fond); border: 1px solid var(--verre-bord); box-shadow: var(--verre-ombre); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
+.est-cadenas-ic { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: var(--gold); color: #0B1F4D; }
+.est-cadenas-box h3 { margin: 12px 0 6px; font-size: 19px; }
+.est-cadenas-box p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
+.est-prog { height: 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; margin: 4px 0 8px; }
+.est-prog span { display: block; height: 100%; border-radius: 999px; background: var(--gold); }
+.est-prog-txt { font-size: 13.5px !important; } .est-sur { font-size: 13.5px !important; color: var(--muted); } .est-sur b { color: var(--text); }
+.est-hero-verrou .big { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 767px) { .est-cadenas { padding-top: 28px; } }

@@ -42,6 +42,9 @@ jobs:
             [ -f "$f" ] && node --check "$f" && echo "OK $f"
           done
 
+      - name: Tests de calcul (estimation de fin de saison)
+        run: node tests/estimation.test.js
+
       - name: Sécurité de la page (CSP présente, aucun script inline)
         run: |
           set -e

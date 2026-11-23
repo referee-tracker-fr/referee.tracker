@@ -3222,16 +3222,26 @@ function moisPaiementsData_() {
   });
   const tri = (a, b) => (a.att || 0) - (b.att || 0);
   det.mois.sort(tri); det.ret.sort(tri);
-  return { auj: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), predMois, predOk, par, tot, det, ancien, saison, mois: now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), fin: new Date(d1 - 86400000) };
+  return { auj: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), d0: d0.getTime(), d1: d1.getTime(), d2: d2.getTime(), predMois, predOk, par, tot, det, ancien, saison, mois: now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), fin: new Date(d1 - 86400000) };
 }
 /* b165 — date prévue de chaque virement en attente (au lieu de « le mois prochain ») : 3 dates au plus, le reste regroupé. */
 function echJour_(t) { return new Date(Number(t)).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); }
-function echeancesChips_(c, d0) {
+/* b166 — la bulle du mois en cours d'abord (« Ce mois-ci »), visible tant que le virement n'est pas noté ; rouge dès que
+   la date prévue est passée. Les mois suivants restent en bulles discrètes. m = moisPaiementsData_() (auj, d0, d1). */
+function echeancesChips_(c, m) {
   const dates = Object.keys(c.ech).map(Number).sort((a, b) => a - b), vus = dates.slice(0, 3), reste = dates.slice(3).reduce((t, k) => t + c.ech[k], 0);
-  return vus.map(k => k < d0 ? `<span class="mp-chip mp-chip--ret">${formatMoney(c.ech[k])} · prévu le ${escapeHtml(echJour_(k))}, en retard</span>`
-      : `<span class="mp-chip">${formatMoney(c.ech[k])} · prévu le ${escapeHtml(echJour_(k))}</span>`).join("")
+  return vus.map(k => {
+    const mois = k >= m.d0 && k < m.d1, retard = k < m.auj, j = escapeHtml(echJour_(k));
+    const txt = (mois ? "Ce mois-ci : " : "") + formatMoney(c.ech[k]) + (mois ? " · le " : " · prévu le ") + j + (retard ? ", pas encore noté" : "");
+    return `<span class="mp-chip${retard ? " mp-chip--ret" : mois ? " mp-chip--mois" : " mp-chip--plus"}">${txt}</span>`;
+  }).join("")
     + (reste ? `<span class="mp-chip mp-chip--plus">${formatMoney(reste)} ensuite</span>` : "")
     + (c.sans ? `<span class="mp-chip mp-chip--plus">${formatMoney(c.sans)} sans date</span>` : "");
+}
+/* b166 — sous le total « À percevoir » : ce qui est attendu ce mois-ci et le mois suivant (date prévue du virement). */
+function moisEtSuivant_() {
+  const m = moisPaiementsData_(), nom = t => new Date(t).toLocaleDateString("fr-FR", { month: "long" });
+  return `<span class="pay-mois">En ${escapeHtml(nom(m.d0))} : <b>${formatMoney(m.tot.mois)}</b></span><span class="pay-mois">En ${escapeHtml(nom(m.d1))} : <b>${formatMoney(m.tot.suiv)}</b></span>`;
 }
 /* Téléphone : la liste des virements attendus, par date puis par payeur. */
 function echeancesTel_() {
@@ -3239,7 +3249,7 @@ function echeancesTel_() {
   PAYEURS_ORDRE_.forEach(k => Object.keys(m.par[k].ech).forEach(t => l.push({ t: Number(t), k, v: m.par[k].ech[t] })));
   if (!l.length) return "";
   l.sort((a, b) => a.t - b.t);
-  return `<div class="ech-tel"><h3 class="mp-h">Virements attendus</h3><ul class="ech-l">${l.slice(0, 8).map(x => `<li class="${x.t < m.auj ? "is-ret" : ""}"><span class="ech-d">${escapeHtml(echJour_(x.t))}</span><span class="ech-p">${escapeHtml(PAYEURS_LIB_[x.k])}${x.t < m.auj ? " · en retard" : ""}</span><strong>${formatMoney(x.v)}</strong></li>`).join("")}</ul>${l.length > 8 ? `<p class="card-sub">+ ${l.length - 8} autre(s) plus tard</p>` : ""}</div>`;
+  return `<div class="ech-tel"><h3 class="mp-h">Virements attendus</h3><ul class="ech-l">${l.slice(0, 8).map(x => `<li class="${x.t < m.auj ? "is-ret" : ""}"><span class="ech-d">${escapeHtml(echJour_(x.t))}</span><span class="ech-p">${escapeHtml(PAYEURS_LIB_[x.k])}${x.t < m.auj ? " · pas encore noté" : ""}</span><strong>${formatMoney(x.v)}</strong></li>`).join("")}</ul>${l.length > 8 ? `<p class="card-sub">+ ${l.length - 8} autre(s) plus tard</p>` : ""}</div>`;
 }
 /* b19 — Haut de la page Paiements.
    « À recevoir ce mois-ci » = reste dû des missions dont l'ÉCHÉANCE (colonne
@@ -3267,7 +3277,7 @@ function renderMoisPaiements_() {
     <h3 class="mp-h">Qui te doit quoi</h3>
     <div class="mp-payeurs">${PAYEURS_ORDRE_.filter(k => m.par[k]).map(k => {
       const c = m.par[k], du = c.ret + c.mois + c.suiv + c.plus + c.sans;
-      const prochain = echeancesChips_(c, m.auj);
+      const prochain = echeancesChips_(c, m);
       return `<div class="mp-payeur${c.ret ? " is-ret" : ""}${du ? "" : " is-solde"}">
         <div class="mp-p-nom">${escapeHtml(PAYEURS_LIB_[k])}</div>
         <div class="mp-p-du"><strong>${du ? formatMoney(du) : "Soldé"}</strong><span>${du ? "reste à recevoir" : "rien en attente"}</span></div>
@@ -3298,6 +3308,7 @@ function renderArgentTel_(root, rows) {
       <div class="tel-kpi tel-kpi--att"><strong>${formatMoney(sum(aVenir, "_reste"))}</strong><span>à venir</span></div>
       <div class="tel-kpi ${retards.length ? "tel-kpi--ko" : ""}"><strong>${formatMoney(sum(retards, "_reste"))}</strong><span>en retard</span></div>
     </div>
+    <p class="pay-mois-l pay-mois-l--tel">${moisEtSuivant_()}</p>
     ${echeancesTel_()}
     ${bloc("tel-retard", "En retard", retards, true, "is-retard")}
     ${bloc("tel-avenir", "À percevoir", aVenir, true)}
@@ -3342,7 +3353,7 @@ function renderPaiements() {
     ${barre}
     <h2 class="section-title">Paiements</h2>
     <div class="kpi-grid pay-kpis">
-      <div class="kpi hero pay-kpi-attente"><label>À percevoir</label><strong>${formatMoneyC(totalDu)}</strong><span class="sub">${rows.filter(r => (r._reste || 0) > 0).length} mission(s) jouées ou désignées, pas encore soldées · saison ${escapeHtml(state.selectedSeason || "")}</span></div>
+      <div class="kpi hero pay-kpi-attente"><label>À percevoir</label><strong>${formatMoneyC(totalDu)}</strong><span class="pay-mois-l">${moisEtSuivant_()}</span><span class="sub">${rows.filter(r => (r._reste || 0) > 0).length} mission(s) jouées ou désignées, pas encore soldées · saison ${escapeHtml(state.selectedSeason || "")}</span></div>
       <div class="kpi"><label>Déjà reçu</label><strong>${formatMoneyC(totalRecu)}</strong><span class="sub">${rows.filter(r => (r._encaisse || 0) > 0).length} paiement(s) encaissé(s)${benevoles.length ? " · " + benevoles.length + " bénévole(s)" : ""}</span></div>
     </div>
     <div id="moisZone">${renderMoisPaiements_()}</div>

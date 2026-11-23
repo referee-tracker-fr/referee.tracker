@@ -6129,3 +6129,32 @@ body:has(#tabMorePanel:not([hidden])) #rtVoile { z-index: 95; }
 .est-prog-txt { font-size: 13.5px !important; } .est-sur { font-size: 13.5px !important; color: var(--muted); } .est-sur b { color: var(--text); }
 .est-hero-verrou .big { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 767px) { .est-cadenas { padding-top: 28px; } }
+
+/* b168 — schéma de la bulle « Comment c'est calculé » (page Estimation) */
+.rt-info-ov .rt-info-pop:has(.est-sch) { width: min(460px, 100%); }
+.est-sch { --s1: var(--green); --s2: var(--gold); --s3: var(--muted); margin-top: 12px; }
+.est-sch-barre { display: flex; gap: 6px; }
+.est-sch-barre > div { min-width: 0; }
+.est-sch-b { display: flex; gap: 2px; height: 16px; }
+.est-sch-b i { flex: 1; border-radius: 4px; }
+.est-sch i.s1, .est-sch .s1 > i { background: var(--s1); }
+.est-sch i.s2, .est-sch .s2 > i { background: var(--s2); }
+.est-sch i.s3, .est-sch .s3 > i { background: repeating-linear-gradient(135deg, var(--s3) 0 3px, transparent 3px 6px); border: 1px dashed var(--s3); box-sizing: border-box; }
+.est-sch-barre span { display: block; margin-top: 5px; padding-top: 3px; border-top: 2px solid var(--line); font-size: 12px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.est-sch-l { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.est-sch-l li { display: grid; grid-template-columns: 12px 1fr auto; gap: 9px; align-items: start; }
+.est-sch-l li > i { width: 12px; height: 12px; border-radius: 3px; margin-top: 4px; }
+.est-sch-l small { display: block; font-size: 12px; line-height: 1.4; color: var(--muted); font-weight: 500; }
+.est-sch-l em { font-style: normal; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rt-info-ov .rt-info-txt .est-sch-eq { margin: 12px 0 10px; padding: 9px 10px; border-radius: 10px; background: var(--surface-2); text-align: center; font-size: 13px; }
+.est-sch-eq span { color: var(--muted); }
+.est-sch-eq strong { display: block; margin-top: 2px; font-size: 16px; }
+.est-sch-four { position: relative; height: 6px; margin: 0 6px; border-radius: 3px; background: var(--line); }
+.est-sch-four i { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--text); border: 2px solid var(--surface-2); box-sizing: border-box; }
+.rt-info-ov .rt-info-txt .est-sch-fl { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.est-sch-fl span:nth-child(2) { text-align: center; }
+.est-sch-fl span:first-child, .est-sch-fl span:last-child { white-space: nowrap; font-weight: 700; color: var(--text); }
+.est-sch-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.rt-info-ov .rt-info-txt .est-sch-2 p { margin: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
+.est-sch-2 b { display: block; margin-bottom: 2px; }
+.rt-info-ov .rt-info-txt .est-sch-n { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }

@@ -8321,14 +8321,31 @@ function renderEstimation() {
   if (bi) bi.addEventListener("click", () => ouvrirModaleInfo_("Comment c'est calculé", estInfoHtml_(e)));
 }
 
-function estInfoHtml_(e) {   // b156 — version courte
-  const F = v => formatMoney(v);
-  return `<p><strong>Réalisé</strong> : matchs joués, montants réels.</p>
-    <p><strong>À venir</strong> : désignations reçues, calculées au km près.</p>
-    <p><strong>À prévoir</strong> : matchs pas encore reçus, estimés mois par mois ${e.sansHistorique ? "d'après la répartition habituelle d'une saison et ton rythme. Si tu importes ta saison passée, l'estimation suivra ton propre calendrier" : "d'après tes deux dernières saisons et ton rythme"}.</p>
-    <p>L'estimation ne change pas quand tu joues un match déjà désigné. Elle bouge quand une convocation arrive, et le 1er de chaque mois, où elle se recale sur ce que tu as vraiment fait.</p>
-    <p>La fourchette est large exprès : en rejouant les saisons passées, le résultat réel y tombe 8 fois sur 10.</p>
-    <p><strong>Sûr</strong> : ${F(round2(e.rF.ind + e.rA.ind))} d'indemnités (réalisé + à venir). Le reste est une projection, plus fiable à mesure que la saison avance.</p>`;
+function estInfoHtml_(e) {   // b168 — schéma : barre en trois parts (sûr / projection), fourchette, ce qui fait bouger
+  const F = v => formatMoney(v), ind = [e.rF.ind, e.rA.ind, e.rC.ind].map(v => Math.max(0, v));
+  const sur = round2(ind[0] + ind[1]), tout = sur + ind[2];
+  const pS = tout > 0 ? Math.min(82, Math.max(18, Math.round(100 * sur / tout))) : 50;   // bornes : les deux étiquettes restent lisibles
+  const pos = e.netH > e.netB ? Math.round(100 * (e.netC - e.netB) / (e.netH - e.netB)) : 50;
+  const li = (c, nom, n, quoi, v) => `<li class="${c}"><i></i><span><b>${nom}</b> · ${n} match${n > 1 ? "s" : ""}<small>${quoi}</small></span><em>${F(v)}</em></li>`;
+  return `<div class="est-sch">
+    <div class="est-sch-barre" aria-hidden="true">
+      <div style="flex:${pS}"><div class="est-sch-b"><i class="s1" style="flex:${ind[0] || 1}"></i><i class="s2" style="flex:${ind[1] || 1}"></i></div><span>Sûr · ${F(sur)}</span></div>
+      <div style="flex:${100 - pS}"><div class="est-sch-b"><i class="s3"></i></div><span>Projection</span></div>
+    </div>
+    <ul class="est-sch-l">
+      ${li("s1", "Réalisé", e.rF.n, "matchs joués, montants réels", e.rF.ind)}
+      ${li("s2", "À venir", e.rA.n, "désignations reçues, calculées au km près", e.rA.ind)}
+      ${li("s3", "À prévoir", e.rC.n, "pas encore reçus, estimés mois par mois d'après " + (e.sansHistorique ? "la répartition habituelle d'une saison et ton rythme" : "tes deux dernières saisons et ton rythme"), e.rC.ind)}
+    </ul>
+    <p class="est-sch-eq">${F(e.totC.ind)} d'indemnités <span>− carburant, entretien, hôtels</span><strong>= ${F(e.netC)} net estimé</strong></p>
+    <div class="est-sch-four" aria-hidden="true"><i style="left:${pos}%"></i></div>
+    <p class="est-sch-fl"><span>${F(e.netB)}</span><span>fourchette large exprès : le résultat réel y tombe 8 fois sur 10</span><span>${F(e.netH)}</span></p>
+    <div class="est-sch-2">
+      <p><b>Elle bouge</b>quand une convocation arrive, et le 1er de chaque mois, où elle se recale sur ce que tu as vraiment fait.</p>
+      <p><b>Elle ne bouge pas</b>quand tu joues un match déjà désigné.</p>
+    </div>
+    ${e.sansHistorique ? `<p class="est-sch-n">Si tu importes ta saison passée, l'estimation suivra ton propre calendrier.</p>` : ""}
+  </div>`;
 }
 
 /* b109 — aide de la rubrique Hôtel (reprend les seuils de HOTEL_CFG). */

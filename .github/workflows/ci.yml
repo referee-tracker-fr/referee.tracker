@@ -105,7 +105,7 @@ jobs:
         run: |
           set -e
           mkdir _site
-          git -c core.quotepath=off ls-files | grep -vE '^\.|(^|/)[^/]*\.md$|^LICENSE$' | while IFS= read -r f; do
+          git -c core.quotepath=off ls-files | grep -vE '^\.|(^|/)[^/]*\.md$|^LICENSE$|^worker\.js$|^wrangler\.jsonc$' | while IFS= read -r f; do
             mkdir -p "_site/$(dirname "$f")"; cp "$f" "_site/$f"
           done
           test -f _site/index.html && test -f _site/CNAME

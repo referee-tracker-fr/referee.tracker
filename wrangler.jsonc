@@ -1,0 +1,14 @@
+// Hébergement de l'app chez Cloudflare (remplace GitHub Pages).
+{
+  "name": "referee-tracker-app",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-13",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    // "none" : adresses inchangées (index.html, cgu.html…), aucune redirection pour le service worker
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "run_worker_first": true
+  }
+}

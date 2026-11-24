@@ -1,0 +1,10 @@
+# Fichiers du dépôt à ne pas publier (même liste que l'ancienne publication GitHub Pages, + config Cloudflare)
+.*
+*.md
+LICENSE
+CNAME
+wrangler.jsonc
+worker.js
+tests
+graphify-out
+node_modules

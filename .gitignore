@@ -62,3 +62,7 @@ npm-debug.log*
 
 # --- Graphify (carte du code, locale) ---
 graphify-out/
+
+# --- Cloudflare (wrangler dev) ---
+.wrangler/
+.dev.vars

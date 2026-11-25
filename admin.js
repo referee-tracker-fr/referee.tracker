@@ -28,7 +28,14 @@
   // b157 — dernière activité réelle : le plus récent entre la dernière identification et la dernière utilisation de l'app (session restée ouverte)
   const vuLe = (u) => { const a = (u.usage || {}).derniere_activite, b = u.derniere_connexion; return !a ? b || "" : !b ? a : (new Date(a) > new Date(b) ? a : b); };
   const vuTxt = (d) => (d ? fmt(d) + " · " + depuis(d) : "jamais");
-  const nomDe = (p, email) => (p && (p.prenom || p.nom_ffbb)) ? [p.prenom, p.nom_ffbb].filter(Boolean).join(" ") : (email || "—");
+  /* b172 — le nom officiel de la fédération contient déjà le prénom (« REBHOLZ CLEMENT ») : on ne le répète pas.
+     shortcut: un nom de famille identique au prénom (« Martin MARTIN ») est réduit au prénom ; à affiner si le cas se présente. */
+  const sansAcc_ = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const nomFamille = (p) => { const pre = new Set(sansAcc_(p && p.prenom).split(/[\s-]+/).filter(Boolean));
+    return String((p && p.nom_ffbb) || "").trim().split(/\s+/).filter((w) => !sansAcc_(w).split("-").filter(Boolean).every((x) => pre.has(x))).join(" "); };
+  const nomSansDoublon = (t) => { const vus = new Set(); return String(t || "").trim().split(/\s+/).filter((w) => {
+    const parts = sansAcc_(w).split("-").filter(Boolean), neuf = parts.some((x) => !vus.has(x)); parts.forEach((x) => vus.add(x)); return neuf; }).join(" "); };
+  const nomDe = (p, email) => (p && (p.prenom || p.nom_ffbb)) ? [p && p.prenom, nomFamille(p)].filter(Boolean).join(" ") : (email || "—");
   const zonesTxt = (z) => { z = z || {}; return [z.cd, z.ligue, z.cf ? "CF" : ""].filter(Boolean).join(" · ") || "—"; };
   // b163 (audit sécurité) — une cellule qui commence par = + - @ (sauf un vrai nombre) est lue comme une formule par Excel :
   // on la neutralise avec une apostrophe. Un arbitre choisit son prénom, ses contacts, ses messages : ils finissent dans ces exports.
@@ -342,7 +349,7 @@
     el.querySelectorAll(".pill").forEach((p) => p.addEventListener("click", () => { filtreStatut = p.dataset.f; rendus.arbitres(false); }));
     const statut = (u) => (u.banni ? "suspendu" : (u.profil || {}).statut || (u.invite ? "inscrit" : "actif"));
     tableCourante = tableau($("tblArb"), [
-      { t: "Arbitre", k: (u) => ((u.profil || {}).prenom || "") + " " + ((u.profil || {}).nom_ffbb || ""), cl: "nw", r: (u) => "<strong>" + esc((u.profil || {}).prenom || "—") + "</strong> " + esc((u.profil || {}).nom_ffbb || "") + (u.admin ? " " + badge("admin", "navy") : "") + (u.mfa ? " " + badge("2FA") : "") },
+      { t: "Arbitre", k: (u) => nomDe(u.profil || {}, ""), cl: "nw", r: (u) => "<strong>" + esc((u.profil || {}).prenom || "—") + "</strong> " + esc(nomFamille(u.profil || {})) + (u.admin ? " " + badge("admin", "navy") : "") + (u.mfa ? " " + badge("2FA") : "") },
       { t: "E-mail", k: "email", cl: "nw", r: (u) => '<span class="ellip" title="' + esc(u.email) + '">' + esc(u.email) + "</span>" },
       { t: "Réception", k: (u) => (u.profil || {}).adresse_reception || "", cl: "nw", r: (u) => { const a = (u.profil || {}).adresse_reception; return a ? '<span class="mono" title="' + esc(a) + '">' + esc(a.split("@")[0]) + '<span class="mut">@…</span></span>' : "—"; } },
       { t: "Statut", k: statut, r: (u) => badgeStatut(statut(u)) },
@@ -405,7 +412,7 @@
       // b88l — carte « Identité » lisible en 5 secondes (avant le formulaire d'édition)
       (function () {
         const v = (ME.vehicules || []).slice(-1)[0] || {}, tel = p.telephone || "", wa = waNum(tel);
-        const lig = [["Nom", (p.prenom || "") + " " + (p.nom_ffbb || "")], ["E-mail de connexion", u.email], ["E-mail fédération", p.email_ffbb || ME.email_ffbb || "—"],
+        const lig = [["Nom", nomDe(p, "—")], ["E-mail de connexion", u.email], ["E-mail fédération", p.email_ffbb || ME.email_ffbb || "—"],
           ["Téléphone", tel ? esc(tel) + (wa ? ' · <a href="https://wa.me/' + wa + '" target="_blank" rel="noopener">WhatsApp</a>' : "") + ' · <a href="tel:' + esc(tel) + '">Appeler</a>' : "—"],
           ["Domicile (départ des trajets)", MA.renseignee ? esc([MA.code_postal, MA.ville].filter(Boolean).join(" ")) + (MA.localisee ? "" : " · non localisé") : "—"],
           ["Véhicule", v.nom ? esc(v.nom + (v.conso ? " · " + v.conso + " L/100" : "") + (v.carburant ? " · " + v.carburant : "")) : "—"],
@@ -691,7 +698,7 @@
       '<div class="grid-2">' + carte("Niveau des arbitres", "profil", listeKN(R.niveaux_profils)) + carte("Comités", "profil", listeKN(R.comites)) + "</div>" +
       carte("Tableau de bord par arbitre", "saison " + esc(d.saison) + " · clic = fiche", '<div id="krT"></div>');
     tableCourante = tableau(el.querySelector("#krT"), [
-      { t: "Arbitre", k: "prenom", r: (x) => esc((x.prenom || "—") + (x.nom ? " · " + x.nom : "")) + (x.moteur ? "" : " " + badge("sans moteur", "")) },
+      { t: "Arbitre", k: "prenom", r: (x) => esc(nomDe({ prenom: x.prenom, nom_ffbb: x.nom })) + (x.moteur ? "" : " " + badge("sans moteur", "")) },
       { t: "Niveau", k: "niveau", r: (x) => '<span class="tiny">' + esc(x.niveau || "—") + "</span>" },
       { t: "Matchs saison", k: "matchs_saison", cl: "num right", r: (x) => esc(x.matchs_saison) }, { t: "À venir", k: "a_venir", cl: "num right", r: (x) => esc(x.a_venir) },
       { t: "Indemnités saison", k: "montant_saison", cl: "num right", r: (x) => euro(x.montant_saison) }, { t: "Encaissé", k: "recu_saison", cl: "num right", r: (x) => euro(x.recu_saison) },
@@ -1551,7 +1558,7 @@
           kv("bDe", "Officiel désigné (catégorie → €)", c.designe, "Catégorie") + kv("bQr", "Jeunes qualification région, code -5 (catégorie → €)", c.qr, "Catégorie") +
           kv("bIn", "Interdépartemental, code -7 (catégorie → €)", c.interdepartemental, "Catégorie") + kv("bAm", "Amicaux / tournois (Séniors, Jeunes → €)", c.amicaux, "Séniors ou Jeunes");
         // b78f — propositions des arbitres (comités sans barème connu) : déjà utilisées par leur moteur, à valider ici.
-        const bpHtml = (l) => '<div class="subtab">Barèmes proposés par les arbitres</div>' + (!l.length ? '<p class="vide">Aucune proposition</p>' : '<div class="tbl"><table><thead><tr><th>Arbitre</th><th>Comité · ligue</th><th>Part fixe (€)</th><th>Délais (j)</th><th>Statut</th><th></th></tr></thead><tbody>' + l.map((x) => '<tr><td>' + esc(((x.profil || {}).prenom || "") + " " + ((x.profil || {}).nom_ffbb || "")) + '<br><span class="mut tiny">' + fmt(x.maj) + '</span></td><td>' + esc(String(x.cd || "—").toUpperCase() + " · " + String(x.ligue || "—").toUpperCase()) + '</td><td class="tiny">' + esc(Object.entries(x.parts || {}).map(([c, m]) => c + " " + m).join(" · ") || "—") + (x.commentaire ? '<br><span class="mut">« ' + esc(x.commentaire) + ' »</span>' : "") + '</td><td class="tiny">comité ' + esc(x.delai_cd ?? "—") + " · ligue " + esc(x.delai_ligue ?? "—") + '</td><td>' + ({ a_valider: '<span class="badge orange">à valider</span>', valide: '<span class="badge green">validé</span>', rejete: '<span class="badge red">refusé</span>' }[x.statut] || esc(x.statut)) + '</td><td>' + (x.statut === "a_valider" ? '<button class="btn sm pri" data-bpv="' + x.id + '">Valider</button> <button class="btn sm" data-bpr="' + x.id + '">Refuser</button>' : "") + "</td></tr>").join("") + "</tbody></table></div>" + '<p class="mut tiny">Valider copie la part fixe et les délais dans ce barème (les valeurs déjà saisies ici priment). Refuser : le moteur de l\'arbitre repasse au montant de la convocation, sinon km seuls.</p>');
+        const bpHtml = (l) => '<div class="subtab">Barèmes proposés par les arbitres</div>' + (!l.length ? '<p class="vide">Aucune proposition</p>' : '<div class="tbl"><table><thead><tr><th>Arbitre</th><th>Comité · ligue</th><th>Part fixe (€)</th><th>Délais (j)</th><th>Statut</th><th></th></tr></thead><tbody>' + l.map((x) => '<tr><td>' + esc(nomDe(x.profil || {}, "—")) + '<br><span class="mut tiny">' + fmt(x.maj) + '</span></td><td>' + esc(String(x.cd || "—").toUpperCase() + " · " + String(x.ligue || "—").toUpperCase()) + '</td><td class="tiny">' + esc(Object.entries(x.parts || {}).map(([c, m]) => c + " " + m).join(" · ") || "—") + (x.commentaire ? '<br><span class="mut">« ' + esc(x.commentaire) + ' »</span>' : "") + '</td><td class="tiny">comité ' + esc(x.delai_cd ?? "—") + " · ligue " + esc(x.delai_ligue ?? "—") + '</td><td>' + ({ a_valider: '<span class="badge orange">à valider</span>', valide: '<span class="badge green">validé</span>', rejete: '<span class="badge red">refusé</span>' }[x.statut] || esc(x.statut)) + '</td><td>' + (x.statut === "a_valider" ? '<button class="btn sm pri" data-bpv="' + x.id + '">Valider</button> <button class="btn sm" data-bpr="' + x.id + '">Refuser</button>' : "") + "</td></tr>").join("") + "</tbody></table></div>" + '<p class="mut tiny">Valider copie la part fixe et les délais dans ce barème (les valeurs déjà saisies ici priment). Refuser : le moteur de l\'arbitre repasse au montant de la convocation, sinon km seuls.</p>');
         const bpBox = document.createElement("div"); bpBox.id = "bpBox"; bpBox.innerHTML = '<p class="mut tiny">Chargement des propositions…</p>';
         setTimeout(async () => { F.appendChild(bpBox);
           try { if (!cache.bp) cache.bp = (await admin("baremes_proposes.liste")).data || []; bpBox.innerHTML = bpHtml(cache.bp); } catch (e) { bpBox.innerHTML = '<p class="err tiny">' + esc(e.message) + "</p>"; }
@@ -1906,7 +1913,7 @@
     const s = cache.statsDetail, g = s.global || {}, arb = s.arbitres || [];
     const sel = statsUser ? arb.find((a) => a.user_id === statsUser) : null, d = sel || g;
     const bloc = (titre, html, sub) => '<div class="card"><div class="card-head"><h2>' + titre + "</h2>" + (sub ? '<span class="sub">' + sub + "</span>" : "") + "</div>" + html + "</div>";
-    const nom = (a) => a.prenom || a.nom_ffbb ? [a.prenom, a.nom_ffbb].filter(Boolean).join(" ") : a.email || a.user_id.slice(0, 8);
+    const nom = (a) => nomDe(a, a.email || a.user_id.slice(0, 8));
     el.innerHTML = '<div class="toolbar"><span class="pill' + (!statsUser ? " on" : "") + '" data-u="">Global</span>' + arb.map((a) => '<span class="pill' + (a.user_id === statsUser ? " on" : "") + '" data-u="' + a.user_id + '">' + esc(nom(a)) + "</span>").join("") + "</div>" +
       '<div class="tiles"><div class="tile"><b>' + (d.matchs || 0) + '</b><span>Matchs</span><small>hors annulés, 12 mois glissants et plus</small></div><div class="tile gold"><b>' + euro(d.indemnites) + '</b><span>Indemnités</span><small>somme indemnite_totale</small></div><div class="tile green"><b>' + pct(d.payes, d.payables) + '</b><span>Taux payé</span><small>' + (d.payes || 0) + " reçus / " + (d.payables || 0) + ' payables</small></div><div class="tile"><b>' + (d.f5 || 0) + ' <span style="font-size:13px;color:var(--muted)">/ ' + (d.f3 || 0) + '</span></b><span>5x5 / 3x3</span><small>' + (d.autres || 0) + ' autre(s)</small></div><div class="tile red"><b>' + (d.evaluations || 0) + '</b><span>Évaluations</span></div><div class="tile gray"><b>' + (sel ? 1 : arb.length) + "</b><span>Arbitre(s)</span></div></div>" +
       '<div class="grid-2">' + bloc("Matchs par mois", barres((s.mois || []).map((m) => ({ l: moisLbl(m), v: (d.par_mois || {})[m] || 0 }))), "12 derniers mois · date du match") +
@@ -2086,7 +2093,7 @@
     let L = []; try { L = await rpcAdmin("rt_import_demandes_admin"); } catch (e) { return; }
     const el = $("sec-inscriptions"), box = document.createElement("div");
     box.innerHTML = VZ.carte("Imports d'historique", "PDF déposés par les arbitres depuis l'app · 60 jours", L.length ? '<div class="tbl"><table><thead><tr><th>Arbitre</th><th>Le</th><th class="num right">PDF envoyés</th><th class="num right">Encore à rapatrier</th></tr></thead><tbody>' +
-      L.map((d) => "<tr><td>" + esc((d.prenom || "") + " " + (d.nom || "")) + "</td><td>" + fmt(d.le) + '</td><td class="num right">' + esc(d.fichiers) + '</td><td class="num right">' + (d.en_attente ? '<span class="badge orange">' + esc(d.en_attente) + "</span>" : '<span class="badge green">0</span>') + "</td></tr>").join("") + "</tbody></table></div>" : '<p class="vide">Aucun dépôt pour l\'instant. Les moteurs rapatrient les PDF seuls toutes les 30 minutes.</p>');
+      L.map((d) => "<tr><td>" + esc(nomDe({ prenom: d.prenom, nom_ffbb: d.nom })) + "</td><td>" + fmt(d.le) + '</td><td class="num right">' + esc(d.fichiers) + '</td><td class="num right">' + (d.en_attente ? '<span class="badge orange">' + esc(d.en_attente) + "</span>" : '<span class="badge green">0</span>') + "</td></tr>").join("") + "</tbody></table></div>" : '<p class="vide">Aucun dépôt pour l\'instant. Les moteurs rapatrient les PDF seuls toutes les 30 minutes.</p>');
     el.appendChild(box.firstChild);
   };
 
@@ -2513,7 +2520,7 @@
       { nom: "Indicateurs", lignes: [["Indicateur", "Valeur"]].concat(Object.entries(T).map(([k, v]) => [k.replace(/_/g, " "), v])) },
       { nom: "Par jour", lignes: [["Jour", "Arbitres", "Minutes", "Matchs", "Clips", "Exports"]].concat((S.jours || []).map((d) => [d.jour, d.arbitres, d.minutes, d.matchs, d.clips, d.exports])) },
       { nom: "Arbitres", lignes: [["Arbitre", "Niveau", "1re utilisation", "Dernière", "Jours actifs", "Minutes", "Ouvertures", "Matchs", "Clips", "BEST", "Exports", "Échecs export", "Version", "Système"]]
-        .concat((S.arbitres || []).map((a) => [a.nom, a.niveau, a.premier, a.dernier, a.jours, a.minutes, a.ouvertures, a.matchs, a.clips, a.best, a.exports, a.echecs_export, a.version, rcOs(a.os)])) },
+        .concat((S.arbitres || []).map((a) => [nomSansDoublon(a.nom), a.niveau, a.premier, a.dernier, a.jours, a.minutes, a.ouvertures, a.matchs, a.clips, a.best, a.exports, a.echecs_export, a.version, rcOs(a.os)])) },
       { nom: "Détail", lignes: [["Famille", "Valeur", "Nombre"]].concat(Object.entries(S.compteurs || {}).sort().map(([k, v]) => { const i = k.indexOf(":"); return [k.slice(0, i), rcLib(k.slice(0, i), k.slice(i + 1)), v]; })) },
       { nom: "Performances", lignes: [["Mesure", "Nombre", "Moyenne (ms)", "Max (ms)"]].concat(Object.entries(S.perf || {}).map(([k, p]) => [RC_PERF[k] || k, p.n, p.moyenne_ms, p.max_ms])) },
       { nom: "Environnements", lignes: [["Élément", "Valeur", "Arbitres"]].concat(Object.entries(S.environnements || {}).flatMap(([k, o]) => Object.entries(o).map(([v, n]) => [RC_ENV[k] || k, v, n]))) },
@@ -2603,12 +2610,12 @@
     const { el, S } = await rcPage("rcarbitres", (S) => {
       const A = S.arbitres || [];
       return '<div class="vz-g2">' +
-        VZ.carte("Clips par arbitre", "", A.length ? VZ.barresH(A.filter((a) => a.clips).map((a) => ({ l: a.nom || "—", v: a.clips }))) : rcVide) +
-        VZ.carte("Temps d'utilisation par arbitre", "", A.length ? VZ.barresH(A.slice().sort((a, b) => b.minutes - a.minutes).map((a) => ({ l: a.nom || "—", v: a.minutes })), minutesTxt) : rcVide) +
+        VZ.carte("Clips par arbitre", "", A.length ? VZ.barresH(A.filter((a) => a.clips).map((a) => ({ l: nomSansDoublon(a.nom) || "—", v: a.clips }))) : rcVide) +
+        VZ.carte("Temps d'utilisation par arbitre", "", A.length ? VZ.barresH(A.slice().sort((a, b) => b.minutes - a.minutes).map((a) => ({ l: nomSansDoublon(a.nom) || "—", v: a.minutes })), minutesTxt) : rcVide) +
         '</div><div class="card"><div class="card-head"><h2>Tous les arbitres</h2><span class="sub">' + A.length + ' sur la période · clique sur une colonne pour trier</span></div><div id="rcTab"></div></div>';
     });
     tableCourante = tableau($("rcTab"), [
-      { t: "Arbitre", k: "nom", r: (a) => "<b>" + esc(a.nom || "—") + "</b>" },
+      { t: "Arbitre", k: "nom", r: (a) => "<b>" + esc(nomSansDoublon(a.nom) || "—") + "</b>" },
       { t: "Niveau", k: "niveau", r: (a) => esc(libN(a.niveau || "") || "—") },
       { t: "1re fois", k: "premier", r: (a) => fmtD(a.premier) },
       { t: "Dernière", k: "dernier", r: (a) => fmtD(a.dernier) },
@@ -2704,7 +2711,7 @@
     const ctx = (c) => Object.entries(c || {}).map(([k, v]) => esc(k.replace(/_/g, " ")) + " : " + esc(v)).join(" · ");
     tableCourante = tableau($("rcSigT"), [
       { t: "Reçu", k: "cree_le", r: (s) => fmt(s.cree_le) },
-      { t: "Arbitre", k: "nom", r: (s) => "<b>" + esc(s.nom || "—") + "</b>" + (s.email ? '<br><a class="tiny" href="mailto:' + esc(s.email) + "?subject=" + encodeURIComponent("REF CLIPS — ton message") + '">' + esc(s.email) + "</a>" : "") },
+      { t: "Arbitre", k: "nom", r: (s) => "<b>" + esc(nomSansDoublon(s.nom) || "—") + "</b>" + (s.email ? '<br><a class="tiny" href="mailto:' + esc(s.email) + "?subject=" + encodeURIComponent("REF CLIPS — ton message") + '">' + esc(s.email) + "</a>" : "") },
       { t: "Type", k: "type", r: (s) => badge(...(RC_TYPE[s.type] || [s.type])) },
       { t: "Message", k: "message", r: (s) => '<div style="white-space:pre-wrap;max-width:520px">' + esc(s.message) + '</div><details><summary class="mut tiny">Infos techniques</summary><p class="mut tiny">' + (ctx(s.contexte) || "aucune") + "</p></details>" },
       { t: "Statut", k: "statut", r: (s) => badge(...(RC_STATUT[s.statut] || [s.statut])) },

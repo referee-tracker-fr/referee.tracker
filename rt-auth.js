@@ -30,6 +30,19 @@ function rtSubDuJeton_() {
 const RT_PROFIL_TTL_MS = 5 * 60 * 1000;
 let _apiUrlT = 0;
 function rtErreurProfil_(msg) { const e = new Error(msg); e.profilAbsent = true; return e; }
+/* b171 — un compte sans fiche d'arbitre n'entre pas dans l'app : on ferme CETTE session (pas celle de l'admin, rangée ailleurs)
+   et on revient à l'écran de connexion avec l'explication. */
+const RT_SANS_FICHE_ = "Ce compte n'a pas d'espace arbitre. S'il s'agit du compte d'administration, ouvre la page d'administration.";
+let _rtSansFicheEnCours = false;
+function rtCompteSansFiche_() {
+  if (_rtSansFicheEnCours) return; _rtSansFicheEnCours = true;
+  Promise.resolve().then(() => SB.signOut("local")).catch(() => {}).then(() => {
+    try { Session.clear(); } catch (e) {}
+    _apiUrlP = null; _apiUrlSub = "";
+    try { showLogin(RT_SANS_FICHE_); } catch (e) {}
+    _rtSansFicheEnCours = false;
+  });
+}
 function apiUrlUtilisateur_(pourEcriture) {
   const sub = rtSubDuJeton_();
   if (!sub) return Promise.reject(rtErreurProfil_("AUTH_REQUIRED"));
@@ -40,6 +53,11 @@ function apiUrlUtilisateur_(pourEcriture) {
   let cache = null; try { cache = JSON.parse(localStorage.getItem(cle) || "null"); } catch (e) {}
   if (cache && cache.prenom) window.RT_AUTH.prenom = cache.prenom;
   const frais = SB.get("profils?select=api_url,prenom&limit=1").then(l => {
+    if (Array.isArray(l) && !l.length) {   // b171 — aucune fiche d'arbitre (compte d'administration, par exemple) : pas d'accès à l'espace arbitre
+      try { localStorage.removeItem(cle); } catch (e) {}
+      rtCompteSansFiche_();
+      throw rtErreurProfil_(RT_SANS_FICHE_);
+    }
     const p = (l && l[0]) || {};
     if (!RT_API_RE_.test(String(p.api_url || ""))) {
       try { localStorage.removeItem(cle); } catch (e) {}
@@ -341,9 +359,9 @@ const SB = {
   },
   login(email, password) { return this._auth("password", { email, password }); },
   /* b47 (A14) — déconnexion côté Supabase : le refresh token est révoqué (scope global = tous les appareils). */
-  async signOut() {
+  async signOut(portee) {   // b171 — portee "local" : cette session seulement (les autres appareils et l'admin restent connectés)
     const s = this.session; if (!s || !s.access_token) return;
-    try { await this._fetch(SB_URL + "/auth/v1/logout?scope=global", { method: "POST", headers: { apikey: SB_KEY, Authorization: "Bearer " + s.access_token } }, 8000); } catch (e) { /* hors ligne : purge locale quand même */ }
+    try { await this._fetch(SB_URL + "/auth/v1/logout?scope=" + (portee === "local" ? "local" : "global"), { method: "POST", headers: { apikey: SB_KEY, Authorization: "Bearer " + s.access_token } }, 8000); } catch (e) { /* hors ligne : purge locale quand même */ }
   },
   /* b47 (A03) — mot de passe oublié : Supabase envoie un lien de réinitialisation vers le site. */
   async recover(email) {

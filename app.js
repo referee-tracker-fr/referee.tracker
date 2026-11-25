@@ -2436,7 +2436,7 @@ function renderMatchCard(row) {
         ${renderMapContainer(row, uid)}
         ${estTel_() ? "" : renderActions(row)}
         ${estTel_() && !row._isPast
-          ? `<details class="pay-fold"><summary><span>Paiement</span><span>${formatMoney(row._amount)} · ${escapeHtml(get(row, "Date attendue") ? "échéance " + get(row, "Date attendue") : "après le match")}</span></summary>${renderPaymentControl(row)}</details>`
+          ? `<details class="pay-fold"><summary><span>Paiement</span><span>${formatMoney(row._amount)} · ${escapeHtml(get(row, "Date attendue") ? (["cd67", "region", "federation"].includes(paiementRegime_(row)) ? "virement le " : "échéance ") + get(row, "Date attendue") : "après le match")}</span></summary>${renderPaymentControl(row)}</details>`
           : renderPaymentControl(row)}
       </div>
     </article>
@@ -7768,6 +7768,7 @@ function paiementEnRetard(row) {
   if (statut === "En retard") return true;
   const prevu = parseFrDate(get(row, "Date attendue") || get(row, "Date paiement"));
   if (!prevu) return false;
+  if (paiementRegime_(row) === "region") prevu.setDate(prevu.getDate() + 7);   // b175 — date du virement Ligue + délai. shortcut: 7 jours écrits ici (marge 2026/2027 de pub.periodes_paiement) ; à lire dans la config si la Ligue change de délai
   prevu.setHours(23, 59, 59, 999);
   const du = toNumber(get(row, "Indemnité totale"));
   const recu = toNumber(get(row, "Reçu recevant")) + toNumber(get(row, "Reçu visiteur")) || toNumber(get(row, "Montant reçu"));

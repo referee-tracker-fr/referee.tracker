@@ -940,3 +940,11 @@ select:not([multiple]):not([size]) { -webkit-appearance: none; appearance: none;
 /* Tableaux : compteur « N / N ligne(s) » détaché de la carte suivante */
 .tbl + .mut.tiny, .tbl-foot { margin: 8px 2px 18px; display: block; }
 .bm-to .nm-to { height: 42px !important; flex: none !important; min-height: 0 !important; display: block; }
+
+/* b177 — téléphone : la barre du haut (titre, recherche, Actualiser) passe sur deux lignes au lieu de sortir de l'écran */
+@media (max-width: 600px) {
+  .main { padding: 10px 10px 30px; }
+  .top { flex-wrap: wrap; gap: 8px; }
+  .top h1 { font-size: 18px; }
+  .search { order: 3; flex: 1 1 100%; width: auto; }
+}

@@ -48,6 +48,9 @@ jobs:
       - name: Formulaires officiels (chaque emplacement existe dans le PDF)
         run: node tests/formulaires.test.js
 
+      - name: Tests du rapprochement des virements
+        run: node tests/virement.test.js
+
       - name: Sécurité de la page (CSP présente, aucun script inline)
         run: |
           set -e

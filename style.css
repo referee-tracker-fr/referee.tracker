@@ -6158,3 +6158,33 @@ body:has(#tabMorePanel:not([hidden])) #rtVoile { z-index: 95; }
 .rt-info-ov .rt-info-txt .est-sch-2 p { margin: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
 .est-sch-2 b { display: block; margin-bottom: 2px; }
 .rt-info-ov .rt-info-txt .est-sch-n { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* b177 — téléphone (320 à 430 px) : rien ne dépasse, rien ne se chevauche, les fenêtres prennent la largeur de l'écran. */
+@media (max-width: 480px) {
+  /* Fenêtres (Mon profil…) : une seule marge au lieu de trois empilées */
+  .rt-modal { padding: 10px; }
+  .rt-modal-card { padding: 18px 14px 16px; }
+  .rt-modal-lg { max-height: calc(100dvh - 20px); }
+  .rt-profile-body .rt-sect { padding: 14px 12px 12px; }
+  .rt-sect > .rt-btn + .rt-btn-danger { margin-top: 10px; }
+  .rt-veh > div { flex: 1 1 auto; min-width: 0; }
+  .rt-veh-carb { flex-wrap: wrap; }
+  .rt-veh-carb select { flex: 1 1 100%; min-width: 0; }
+  .rt-profile-body .rt-details > summary > span { white-space: normal; }   /* « Frais kilométriques » : libellé en entier sur 2 lignes plutôt que « Indemnité… » */
+  /* Accueil, matchs du week-end : l'heure garde sa place, montant/km/état passent à la ligne si besoin */
+  .we-m { grid-template-columns: auto minmax(0, 1fr); }
+  .we-m .we-side { flex-wrap: wrap; justify-content: flex-end; column-gap: 8px; row-gap: 2px; min-width: 0; }
+  /* Argent : les 3 montants tiennent dans leurs cases */
+  .tel-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tel-kpi { min-width: 0; padding: 12px 4px; }
+  .tel-kpi strong { font-size: clamp(13px, 4.4vw, 17px); white-space: nowrap; }
+  .tel-kpi span { font-size: 10px; letter-spacing: .04em; }
+}
+@media (max-width: 380px) {
+  /* Accueil, prochain match : étiquette sur une ligne, date/heure entière, boutons lisibles */
+  .acc-hero--v2 .acc-hero-top .acc-hero-tag { white-space: nowrap; }
+  .acc-hero--v2 .acc-hero-top .acc-hero-indem { font-size: 16px; padding: 6px 10px; }
+  .acc-hero--v2 .acc-btn { gap: 5px; padding: 0 6px; font-size: 13px; }
+  /* Fiche du match, « Mon trajet » : « Covoiturage » coupé proprement au lieu de sortir du bouton */
+  .trajet-opt b { font-size: 12px; white-space: normal; -webkit-hyphens: auto; hyphens: auto; }
+}

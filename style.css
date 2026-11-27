@@ -4876,6 +4876,13 @@ html.rt-geste .tabs-mini-btn.active { animation: rtPop .25s ease both; }
 .vir-f label { display:flex; flex-direction:column; font-size:12.5px; gap:4px; flex:1 1 150px; }
 .vir-ul { list-style:none; padding:0; margin:6px 0; max-height:320px; overflow:auto; }
 .vir-ul li { padding:6px 0; border-bottom:1px solid rgba(127,127,127,.15); font-size:13.5px; }
+/* b181 — virements déjà saisis (annulables) */
+.vir-histo { margin-top:12px; }
+.vir-histo > summary { font-weight:600; padding:6px 0; }
+.vir-ul li.vir-hli { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.vir-hli > span { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; }
+.vir-ec { display:flex; flex-direction:column; gap:4px; margin-top:8px; font-weight:400; }
+.vir-ec select { max-width:100%; }
 .vir-tot { margin:8px 0; font-size:13.5px; } .vir-tot .ok { color:#16A34A; } .vir-tot .ko { color:#DC2626; }
 
 /* b88l — téléphone : clavier ouvert dans Règlement (la barre d'onglets est masquée, le composeur colle au clavier) */

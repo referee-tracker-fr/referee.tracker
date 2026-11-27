@@ -4881,6 +4881,8 @@ html.rt-geste .tabs-mini-btn.active { animation: rtPop .25s ease both; }
 .vir-histo > summary { font-weight:600; padding:6px 0; }
 .vir-ul li.vir-hli { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
 .vir-hli > span { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; }
+.vir-ec { display:flex; flex-direction:column; gap:4px; margin-top:8px; font-weight:400; }
+.vir-ec select { max-width:100%; }
 .vir-tot { margin:8px 0; font-size:13.5px; } .vir-tot .ok { color:#16A34A; } .vir-tot .ko { color:#DC2626; }
 
 /* b88l — téléphone : clavier ouvert dans Règlement (la barre d'onglets est masquée, le composeur colle au clavier) */

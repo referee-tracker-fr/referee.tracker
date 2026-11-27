@@ -3818,14 +3818,21 @@ function virementZone_(root) {
       let h = `Attendu ${formatMoney(sC / 100)} · reçu ${formatMoney(montant)}`;
       if (!eC) h += ` · <b class="ok">montant exact</b>`;
       else if (exp) h += ` · écart ${eC > 0 ? "+" : ""}${formatMoney(eC / 100)}<br><b>Écart expliqué :</b> le payeur a retenu <b>${exp.kmN} km A/R</b> au lieu de ${exp.km} km estimés pour ${exp.matchs.length > 1 ? exp.matchs.length + " matchs" : "le match"} ${escapeHtml(cleanText(get(exp.matchs[0], "Salle") || ""))} (${exp.matchs.map(r => escapeHtml(rbFmtDate_(r._date))).join(", ")}). En enregistrant, l'app corrige ces km et les retient pour tes prochains matchs dans cette salle.`;
-      else h += ` · écart <b class="ko">${eC > 0 ? "+" : ""}${formatMoney(eC / 100)}</b> non expliqué : vérifie la sélection. Si tu enregistres quand même, les matchs concernés passeront « Reçu partiel » ou « À vérifier ».`;
+      else {
+        // b181 — écart non expliqué : jamais attribué au hasard. L'arbitre dit quel match est concerné (avis de paiement du payeur),
+        // sinon tous les matchs du virement passent « À vérifier » avec une note.
+        const avant = (T.querySelector("#virEc") || {}).value || "";
+        h += ` · écart <b class="ko">${eC > 0 ? "+" : ""}${formatMoney(eC / 100)}</b> non expliqué : vérifie la sélection.
+          <label class="vir-ec"><span>Cet écart concerne</span><select id="virEc"><option value="">je ne sais pas : tous « à vérifier »</option>${ch.map(r => `<option value="${escapeHtml(get(r, "UID"))}"${get(r, "UID") === avant ? " selected" : ""}>${escapeHtml((codeCompetition(r) || r._format) + " du " + rbFmtDate_(r._date) + " (" + formatMoney(virDuC_(r) / 100) + ")")}</option>`).join("")}</select></label>`;
+      }
       T.innerHTML = h; return etat;
     };
     L.querySelectorAll("[data-vir]").forEach(x => x.addEventListener("change", tot)); tot();
     L.querySelector("#virGo").addEventListener("click", async () => {
       const { ch, eC, exp } = tot();
       if (!ch.length || !(montant > 0)) { setStatus("Saisis le montant et coche au moins un match", "error"); return; }
-      if (eC && !exp && !confirm("Le montant ne correspond pas aux matchs cochés. Les matchs passeront « Reçu partiel » ou « À vérifier ». Continuer ?")) return;
+      const cibleEc = eC && !exp ? ((L.querySelector("#virEc") || {}).value || "") : "";
+      if (eC && !exp && !confirm(cibleEc ? `Le match choisi recevra ${eC > 0 ? "+" : ""}${formatMoney(eC / 100)} par rapport à sa convocation. Continuer ?` : "Le montant ne correspond pas aux matchs cochés : ils passeront tous « À vérifier », avec une note. Continuer ?")) return;
       const b = L.querySelector("#virGo"); b.disabled = true;
       const du = new Map(ch.map(r => [get(r, "UID"), virDuC_(r)]));
       let ok = 0, kmEchec = "";
@@ -3841,12 +3848,14 @@ function virementZone_(root) {
         }
       }
       // 2) chaque match reçoit exactement son dû ; un reste non expliqué va sur le dernier (reçu partiel / trop-perçu → à vérifier).
-      let reste = Math.round(montant * 100);
+      // 2 bis) b181 — l'écart va sur le match désigné par l'arbitre ; sinon réparti comme avant, et tout le virement est « à vérifier ».
+      const parts = virParts_(ch.map(r => get(r, "UID")), du, Math.round(montant * 100), cibleEc);
+      const noteEc = eC && !exp && !cibleEc ? `Virement du ${rbFmtDate_(parseFrDate(D.value))} : ${formatMoney(montant)} reçus pour ${ch.length} match(s), écart ${eC > 0 ? "+" : ""}${formatMoney(eC / 100)} non attribué` : "";
       for (let i = 0; i < ch.length; i++) {
         const uid = get(ch[i], "UID"), deja = virDejaRecu_(ch[i]) ? 0 : Math.round(toNumber(get(ch[i], "Reçu recevant")) * 100);   // b165 — déjà noté reçu : le montant est remplacé, pas ajouté
-        const part = i === ch.length - 1 ? reste : Math.min(du.get(uid), reste); reste -= part;
+        const part = parts[i];
         try {
-          const res = await jsonp("payment.update", { uid, recu_recevant: ((deja + part) / 100).toFixed(2), mode_recevant: "Virement", date_recu_recevant: D.value });
+          const res = await jsonp("payment.update", Object.assign({ uid, recu_recevant: ((deja + part) / 100).toFixed(2), mode_recevant: "Virement", date_recu_recevant: D.value }, noteEc ? { a_verifier: "1", note: noteEc } : {}));
           if (res && res.success !== false) { ok++; if (res.row && typeof remplacerLigne_ === "function") remplacerLigne_(uid, res.row); }
         } catch (e) { /* compte rendu à la fin */ }
       }
@@ -3857,6 +3866,14 @@ function virementZone_(root) {
   };
   P.addEventListener("change", maj); M.addEventListener("input", maj); D.addEventListener("change", maj); maj();
   virHistorique_(z);
+}
+/* b181 — part de chaque match (centimes) : son dû ; l'écart total va sur le match choisi (s'il reste ≥ 0), sinon les dus
+   sont servis dans l'ordre et le reste va au dernier (règle d'avant). La somme des parts = montant reçu, toujours. */
+function virParts_(uids, du, montantC, cible) {
+  const tot = uids.reduce((t, u) => t + du.get(u), 0), i = uids.indexOf(cible);
+  if (i >= 0 && du.get(cible) + montantC - tot >= 0) return uids.map((u, k) => du.get(u) + (k === i ? montantC - tot : 0));
+  let reste = montantC;
+  return uids.map((u, k) => { const p = k === uids.length - 1 ? reste : Math.min(du.get(u), reste); reste -= p; return p; });
 }
 /* b181 — virements déjà saisis, retrouvés dans les matchs eux-mêmes (payeur + date du virement), sans rien stocker de plus.
    « Annuler ce virement » remet ses matchs « à recevoir » : une erreur de saisie se corrige en annulant puis en ressaisissant. */
